@@ -1,0 +1,1397 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Production Yield Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  /* ── DARK THEME (default) ── */
+  :root {
+    --bg:#0b0f1a; --surface:#111827; --surface2:#1a2235; --surface3:#222f45;
+    --border:#2a3a55; --text:#e8edf5; --text-muted:#7a8aaa;
+    --accent:#3b82f6; --accent2:#10b981;
+    --header-bg:linear-gradient(135deg,#0d1b35 0%,#111827 50%,#0d1b35 100%);
+    --chart-grid:rgba(42,58,85,0.4); --chart-tick:#7a8aaa; --chart-border:#2a3a55;
+    --tooltip-bg:#1a2235; --tooltip-title:#e8edf5; --select-bg:#1a2235;
+  }
+  /* ── LIGHT THEME ── */
+  html.light {
+    --bg:#f0f4f8; --surface:#ffffff; --surface2:#f1f5f9; --surface3:#e2e8f0;
+    --border:#cbd5e1; --text:#0f172a; --text-muted:#64748b;
+    --accent:#2563eb; --accent2:#059669;
+    --header-bg:linear-gradient(135deg,#1e3a5f 0%,#1e40af 50%,#1e3a5f 100%);
+    --chart-grid:rgba(203,213,225,0.7); --chart-tick:#64748b; --chart-border:#cbd5e1;
+    --tooltip-bg:#ffffff; --tooltip-title:#0f172a; --select-bg:#f1f5f9;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'IBM Plex Sans Thai',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;transition:background .25s,color .25s;}
+
+  /* HEADER */
+  .header{background:var(--header-bg);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:72px;position:sticky;top:0;z-index:100;}
+  .header-left{display:flex;align-items:center;gap:16px;}
+  .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#6366f1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+  .header-title{font-size:18px;font-weight:700;letter-spacing:.5px;color:#fff;}
+  .header-sub{font-size:12px;color:rgba(255,255,255,.55);margin-top:2px;}
+  .header-right{display:flex;align-items:center;gap:10px;}
+  .data-badge{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 12px;font-size:12px;color:rgba(255,255,255,.7);}
+  .data-badge span{color:#34d399;font-weight:600;}
+
+  /* THEME BUTTON */
+  .theme-btn{
+    display:flex;align-items:center;gap:7px;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
+    color:#fff;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;
+    cursor:pointer;font-family:inherit;transition:all .2s;letter-spacing:.3px;
+  }
+  .theme-btn:hover{background:rgba(255,255,255,.22);}
+
+  .upload-btn{display:flex;align-items:center;gap:8px;background:#3b82f6;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s;}
+  .upload-btn:hover{background:#2563eb;transform:translateY(-1px);box-shadow:0 4px 16px rgba(59,130,246,.4);}
+  .upload-btn svg{width:16px;height:16px;}
+  #fileInput{display:none;}
+
+  /* MAIN */
+  .main{padding:24px 32px;}
+
+  /* FILTERS */
+  .filters-bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:24px;}
+  .filter-group{display:flex;flex-direction:column;gap:6px;min-width:145px;}
+  .filter-group label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;}
+  .filter-group select,.filter-group input[type=date]{background:var(--select-bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 12px;font-size:13px;font-family:inherit;outline:none;cursor:pointer;transition:border .2s;min-width:145px;}
+  .filter-group select:focus,.filter-group input[type=date]:focus{border-color:var(--accent);}
+  .filter-group select option{background:var(--select-bg);color:var(--text);}
+  .filter-actions{display:flex;gap:8px;align-self:flex-end;}
+  .btn-reset{background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 16px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s;}
+  .btn-reset:hover{border-color:var(--accent);color:var(--accent);}
+  .filter-result{font-size:12px;color:var(--text-muted);align-self:flex-end;padding-bottom:10px;}
+  .filter-result span{color:var(--accent2);font-weight:600;}
+
+  /* KPI */
+  .kpi-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:10px;margin-bottom:22px;}
+  .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
+  .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-color,var(--accent));}
+  .kpi-card:hover{border-color:var(--kpi-color,var(--accent));}
+  .kpi-label{font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px;line-height:1.4;}
+  .kpi-value{font-size:19px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--kpi-color,var(--text));line-height:1;}
+  .kpi-unit{font-size:10px;color:var(--text-muted);margin-top:4px;}
+
+  /* CHARTS */
+  .charts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px;}
+  .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;}
+  .chart-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;}
+  .chart-title{font-size:13px;font-weight:600;color:var(--text);}
+  .chart-subtitle{font-size:11px;color:var(--text-muted);margin-top:2px;}
+  .chart-tag{font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;letter-spacing:.5px;white-space:nowrap;}
+  .chart-wrap{position:relative;height:200px;}
+
+  /* TABLE */
+  .table-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:24px;}
+  .table-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .table-title{font-size:13px;font-weight:600;color:var(--text);}
+  .table-scroll{overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  thead th{background:var(--surface2);color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px;font-size:10px;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+  tbody tr:hover{background:var(--surface2);}
+  tbody td{padding:9px 12px;white-space:nowrap;color:var(--text);}
+  .num{font-family:'IBM Plex Mono',monospace;text-align:right;}
+  .grade-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;background:var(--surface3);color:var(--text);}
+  .table-pagination{display:flex;align-items:center;gap:8px;}
+  .page-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit;}
+  .page-btn:hover{border-color:var(--accent);}
+  .page-info{font-size:11px;color:var(--text-muted);}
+
+  /* UPLOAD */
+  .upload-overlay{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:20px;text-align:center;}
+  .upload-zone{border:2px dashed var(--border);border-radius:16px;padding:60px 80px;cursor:pointer;transition:all .3s;background:var(--surface);}
+  .upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:rgba(59,130,246,.05);}
+  .upload-icon{font-size:48px;margin-bottom:16px;}
+  .upload-title{font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text);}
+  .upload-desc{font-size:13px;color:var(--text-muted);line-height:1.6;}
+  .upload-desc strong{color:var(--accent2);}
+  .upload-hint{font-size:12px;color:var(--text-muted);margin-top:16px;}
+
+  /* FOOTER */
+  .footer{border-top:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--text-muted);}
+
+  /* MULTISELECT */
+  .multiselect-wrap{position:relative;min-width:145px;}
+  .multiselect-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--select-bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 12px;font-size:13px;font-family:inherit;cursor:pointer;transition:border .2s;min-width:145px;user-select:none;}
+  .multiselect-trigger:hover,.multiselect-trigger.open{border-color:var(--accent);}
+  .multiselect-trigger svg{flex-shrink:0;color:var(--text-muted);transition:transform .2s;}
+  .multiselect-trigger.open svg{transform:rotate(180deg);}
+  .multiselect-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;min-width:170px;box-shadow:0 8px 24px rgba(0,0,0,.3);overflow:hidden;}
+  .multiselect-dropdown.open{display:block;}
+  .ms-option{display:flex;align-items:center;gap:10px;padding:9px 14px;font-size:13px;cursor:pointer;transition:background .15s;color:var(--text);}
+  .ms-option:hover{background:var(--surface2);}
+  .ms-checkbox{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:10px;color:#fff;}
+  .ms-option.selected .ms-checkbox{background:var(--accent);border-color:var(--accent);}
+  .ms-divider{height:1px;background:var(--border);margin:2px 0;}
+
+  /* TABS */
+  .tab-nav{display:flex;gap:4px;padding:0 32px;background:var(--header-bg);border-bottom:1px solid var(--border);}
+  .tab-btn{padding:10px 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,.55);border:none;background:transparent;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;transition:all .2s;letter-spacing:.3px;}
+  .tab-btn:hover{color:rgba(255,255,255,.85);}
+  .tab-btn.active{color:#fff;border-bottom-color:#3b82f6;}
+  .tab-page{display:none;}.tab-page.active{display:block;}
+
+  /* SIZE CHECKBOX PANEL */
+  .size-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:18px;}
+  .size-panel-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+  .size-panel-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;}
+  .size-all-btn{background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;}
+  .size-all-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .size-checkbox-grid{display:flex;flex-wrap:wrap;gap:8px;}
+  .size-chip{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);background:var(--surface2);cursor:pointer;font-size:12px;font-weight:500;color:var(--text-muted);transition:all .15s;user-select:none;}
+  .size-chip:hover{border-color:var(--accent);color:var(--text);}
+  .size-chip.checked{background:rgba(59,130,246,.15);border-color:var(--accent);color:var(--accent);font-weight:700;}
+  .size-chip .chip-dot{width:7px;height:7px;border-radius:50%;background:var(--border);transition:background .15s;}
+  .size-chip.checked .chip-dot{background:var(--accent);}
+
+  /* PACKING CHARTS */
+  .charts-grid-2{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:22px;}
+
+  @media(max-width:1500px){.kpi-grid{grid-template-columns:repeat(5,1fr);}}
+  @media(max-width:1100px){.charts-grid{grid-template-columns:repeat(2,1fr);}.kpi-grid{grid-template-columns:repeat(3,1fr);}.charts-grid-2{grid-template-columns:1fr;}}
+  @media(max-width:700px){.charts-grid{grid-template-columns:1fr;}.kpi-grid{grid-template-columns:repeat(2,1fr);}.main{padding:16px;}.header{padding:0 16px;}.tab-nav{padding:0 16px;}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo-icon">📊</div>
+    <div>
+      <div class="header-title">Production Yield Dashboard</div>
+      <div class="header-sub">Glass Noodle Manufacturing · Real-time Analytics</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="data-badge" id="dataBadge" style="display:none">
+      <span id="totalRows">0</span> รายการ · <span id="lastUpdate">–</span>
+    </div>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">☀️ Light</button>
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      อัพโหลดไฟล์ใหม่
+    </button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" onchange="handleFileUpload(this)">
+  </div>
+</div>
+
+<!-- TAB NAV -->
+<div class="tab-nav" id="tabNav" style="display:none">
+  <button class="tab-btn active" onclick="switchTab('yield')">📊 Yield & Productivity</button>
+  <button class="tab-btn" onclick="switchTab('packing')">📦 Packing</button>
+</div>
+
+<div class="main">
+  <!-- UPLOAD SCREEN -->
+  <div class="upload-overlay" id="uploadOverlay">
+    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">📂</div>
+      <div class="upload-title">อัพโหลดไฟล์ Excel</div>
+      <div class="upload-desc">ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์<br>รองรับ <strong>.xlsx</strong> ที่มี Sheet ชื่อ <strong>"Data-Yield"</strong></div>
+    </div>
+    <div class="upload-hint">ข้อมูลจะถูกประมวลผลบนเครื่องของคุณ ไม่มีการส่งข้อมูลออกภายนอก</div>
+  </div>
+
+  <!-- DASHBOARD: YIELD TAB -->
+  <div id="tabYield" class="tab-page active">
+  <div id="dashboard" style="display:none">
+
+    <!-- FILTERS -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>🗓 เดือน</label>
+        <div class="multiselect-wrap" id="wrap-month">
+          <div class="multiselect-trigger" id="trig-month" onclick="msToggle('month')">
+            <span id="lbl-month">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-month"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>📅 วันที่เริ่ม</label>
+        <input type="date" id="fDateFrom" onchange="applyFilters()">
+      </div>
+      <div class="filter-group">
+        <label>📅 วันที่สิ้นสุด</label>
+        <input type="date" id="fDateTo" onchange="applyFilters()">
+      </div>
+      <div class="filter-group">
+        <label>🏭 ประเภท</label>
+        <div class="multiselect-wrap" id="wrap-type">
+          <div class="multiselect-trigger" id="trig-type" onclick="msToggle('type')">
+            <span id="lbl-type">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-type"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>🏷 เกรด</label>
+        <div class="multiselect-wrap" id="wrap-grade">
+          <div class="multiselect-trigger" id="trig-grade" onclick="msToggle('grade')">
+            <span id="lbl-grade">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-grade"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>📦 Lot</label>
+        <div class="multiselect-wrap" id="wrap-lot">
+          <div class="multiselect-trigger" id="trig-lot" onclick="msToggle('lot')">
+            <span id="lbl-lot">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-lot"></div>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn-reset" onclick="resetFilters()">รีเซ็ต</button>
+      </div>
+      <div class="filter-result" id="filterResult"></div>
+    </div>
+
+    <!-- KPI ROW 1: จำนวนชุด + Yield + Waste -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(6,1fr);margin-bottom:10px;">
+      <div class="kpi-card" style="--kpi-color:#e879f9">
+        <div class="kpi-label">จำนวนชุดที่ผลิต</div>
+        <div class="kpi-value" id="kpi9">–</div>
+        <div class="kpi-unit">รวม (ชุด)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#3b82f6">
+        <div class="kpi-label">% Yield ทำเส้น</div>
+        <div class="kpi-value" id="kpi1">–</div>
+        <div class="kpi-unit">เฉลี่ย (กก./กก.×100)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#10b981">
+        <div class="kpi-label">% Yield อบ</div>
+        <div class="kpi-value" id="kpi2">–</div>
+        <div class="kpi-unit">เฉลี่ย (%)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#6366f1">
+        <div class="kpi-label">% Total Yield</div>
+        <div class="kpi-value" id="kpi10">–</div>
+        <div class="kpi-unit">เฉลี่ย (%)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#ef4444">
+        <div class="kpi-label">% Waste ทำเส้น</div>
+        <div class="kpi-value" id="kpi3">–</div>
+        <div class="kpi-unit">เฉลี่ย (%)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#f59e0b">
+        <div class="kpi-label">% Waste อบ</div>
+        <div class="kpi-value" id="kpi4">–</div>
+        <div class="kpi-unit">เฉลี่ย (%)</div>
+      </div>
+    </div>
+    <!-- KPI ROW 2: Productivity + Capacity -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);">
+      <div class="kpi-card" style="--kpi-color:#8b5cf6">
+        <div class="kpi-label">Productivity ทำเส้น</div>
+        <div class="kpi-value" id="kpi5">–</div>
+        <div class="kpi-unit">เฉลี่ย (กก./ชม.)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#06b6d4">
+        <div class="kpi-label">Productivity ล้างอบ</div>
+        <div class="kpi-value" id="kpi6">–</div>
+        <div class="kpi-unit">เฉลี่ย (กก./ชม.)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#34d399">
+        <div class="kpi-label">Capacity ทำเส้น</div>
+        <div class="kpi-value" id="kpi7">–</div>
+        <div class="kpi-unit">เฉลี่ย (กก./ชม.)</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#fb923c">
+        <div class="kpi-label">Capacity ล้างอบ</div>
+        <div class="kpi-value" id="kpi8">–</div>
+        <div class="kpi-unit">เฉลี่ย (กก./ชม.)</div>
+      </div>
+    </div>
+
+    <!-- CHARTS: 6 charts, 3 cols -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">% Yield ทำเส้น</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(59,130,246,.15);color:#3b82f6">YIELD ทำเส้น</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartYieldSen"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">% Yield อบ</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(16,185,129,.15);color:#10b981">YIELD อบ</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartYieldOb"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">% Total Yield</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(99,102,241,.15);color:#6366f1">TOTAL YIELD</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartTotalYield"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">% Waste ทำเส้น</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(239,68,68,.15);color:#ef4444">WASTE ทำเส้น</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWasteSen"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">% Waste อบ</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(245,158,11,.15);color:#f59e0b">WASTE อบ</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartWasteOb"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Productivity ทำเส้น vs ล้างอบ</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(139,92,246,.15);color:#8b5cf6">PRODUCTIVITY</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartProd"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Capacity ทำเส้น vs ล้างอบ</div><div class="chart-subtitle">แนวโน้มรายวัน (เฉลี่ย)</div></div>
+          <span class="chart-tag" style="background:rgba(52,211,153,.15);color:#34d399">CAPACITY</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartCapacity"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">📋 ตารางข้อมูลรายละเอียด</div>
+        <div class="table-pagination">
+          <span class="page-info" id="pageInfo"></span>
+          <button class="page-btn" onclick="changePage(-1)">◀ ก่อนหน้า</button>
+          <button class="page-btn" onclick="changePage(1)">ถัดไป ▶</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่ผลิต</th><th>เดือน</th><th>Lot</th><th>เกรด</th><th>ประเภท</th>
+              <th class="num">จำนวนชุด</th>
+              <th class="num">%Yield ทำเส้น</th><th class="num">%Yield อบ</th><th class="num">%Total Yield</th>
+              <th class="num">%Waste ทำเส้น</th><th class="num">%Waste อบ</th>
+              <th class="num">Prod. ทำเส้น</th><th class="num">Prod. ล้างอบ</th>
+              <th class="num">Cap. ทำเส้น</th><th class="num">Cap. ล้างอบ</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /dashboard -->
+  </div><!-- /tabYield -->
+
+  <!-- DASHBOARD: PACKING TAB -->
+  <div id="tabPacking" class="tab-page">
+  <div id="packingDash" style="display:none">
+
+    <!-- PACKING FILTERS -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>🗓 เดือน</label>
+        <div class="multiselect-wrap" id="wrap-pmonth">
+          <div class="multiselect-trigger" id="trig-pmonth" onclick="msToggle('pmonth')">
+            <span id="lbl-pmonth">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-pmonth"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>📅 วันที่เริ่ม</label>
+        <input type="date" id="pfDateFrom" onchange="applyPackingFilters()">
+      </div>
+      <div class="filter-group">
+        <label>📅 วันที่สิ้นสุด</label>
+        <input type="date" id="pfDateTo" onchange="applyPackingFilters()">
+      </div>
+      <div class="filter-group">
+        <label>🏭 Type</label>
+        <div class="multiselect-wrap" id="wrap-ptype">
+          <div class="multiselect-trigger" id="trig-ptype" onclick="msToggle('ptype')">
+            <span id="lbl-ptype">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-ptype"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>🏷 Grade</label>
+        <div class="multiselect-wrap" id="wrap-pgrade">
+          <div class="multiselect-trigger" id="trig-pgrade" onclick="msToggle('pgrade')">
+            <span id="lbl-pgrade">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-pgrade"></div>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>🔢 Lot</label>
+        <div class="multiselect-wrap" id="wrap-plot">
+          <div class="multiselect-trigger" id="trig-plot" onclick="msToggle('plot')">
+            <span id="lbl-plot">ทั้งหมด</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div class="multiselect-dropdown" id="dd-plot"></div>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button class="btn-reset" onclick="resetPackingFilters()">รีเซ็ต</button>
+      </div>
+      <div class="filter-result" id="packingFilterResult"></div>
+    </div>
+
+    <!-- SIZE CHECKBOX PANEL -->
+    <div class="size-panel" id="sizePanelWrap" style="display:none">
+      <div class="size-panel-header">
+        <span class="size-panel-title">📦 Size</span>
+        <button class="size-all-btn" onclick="sizeSelectAll()">เลือกทั้งหมด</button>
+        <button class="size-all-btn" onclick="sizeClearAll()">ล้าง</button>
+        <span id="sizeSummary" style="font-size:11px;color:var(--text-muted);margin-left:8px;"></span>
+      </div>
+      <div class="size-checkbox-grid" id="sizeCheckboxGrid"></div>
+    </div>
+
+    <!-- PACKING KPI ROW -->
+    <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:22px;">
+      <div class="kpi-card" style="--kpi-color:#3b82f6">
+        <div class="kpi-label">Productivity เฉลี่ย</div>
+        <div class="kpi-value" id="pkpi1">–</div>
+        <div class="kpi-unit">kg/man-hr</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#10b981">
+        <div class="kpi-label">น้ำหนักรวม</div>
+        <div class="kpi-value" id="pkpi2">–</div>
+        <div class="kpi-unit">kg</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color:#f59e0b">
+        <div class="kpi-label">Man-hours รวม</div>
+        <div class="kpi-value" id="pkpi3">–</div>
+        <div class="kpi-unit">ชั่วโมง</div>
+      </div>
+    </div>
+
+    <!-- PACKING CHARTS -->
+    <div class="charts-grid-2" style="margin-bottom:22px;">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Productivity รายวัน (kg/man-hr)</div><div class="chart-subtitle">แนวโน้มเฉลี่ยต่อวัน</div></div>
+          <span class="chart-tag" style="background:rgba(59,130,246,.15);color:#3b82f6">TREND</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartPackProd"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">น้ำหนักรวม (kg) รายวัน</div><div class="chart-subtitle">ปริมาณการบรรจุต่อวัน</div></div>
+          <span class="chart-tag" style="background:rgba(16,185,129,.15);color:#10b981">VOLUME</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartPackKg"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Productivity แยกตาม Grade</div><div class="chart-subtitle">เฉลี่ย kg/man-hr ต่อ Grade</div></div>
+          <span class="chart-tag" style="background:rgba(245,158,11,.15);color:#f59e0b">BY GRADE</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartPackGrade"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div><div class="chart-title">Productivity แยกตาม Size</div><div class="chart-subtitle">เฉลี่ย kg/man-hr ต่อ Size</div></div>
+          <span class="chart-tag" style="background:rgba(139,92,246,.15);color:#8b5cf6">BY SIZE</span>
+        </div>
+        <div class="chart-wrap"><canvas id="chartPackSize"></canvas></div>
+      </div>
+    </div>
+
+    <!-- PACKING TABLE -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">📋 ตารางข้อมูลการบรรจุ</div>
+        <div class="table-pagination">
+          <span class="page-info" id="packPageInfo"></span>
+          <button class="page-btn" onclick="changePackPage(-1)">◀ ก่อนหน้า</button>
+          <button class="page-btn" onclick="changePackPage(1)">ถัดไป ▶</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>วันที่บรรจุ</th><th>เดือน</th><th>Lot</th><th>Type</th><th>Grade</th><th>Size</th><th>Customer</th>
+              <th class="num">kg</th><th class="num">Man</th><th class="num">Hr</th><th class="num">kg/man-hr</th>
+            </tr>
+          </thead>
+          <tbody id="packTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /packingDash -->
+  </div><!-- /tabPacking -->
+
+</div><!-- /main -->
+
+<div class="footer">
+  <div>Production Analytics Dashboard · Glass Noodle Manufacturing</div>
+  <div id="footerFile" style="color:var(--text-muted)">ยังไม่ได้โหลดข้อมูล</div>
+</div>
+
+<script>
+// ── THEME ──────────────────────────────────────────────────
+let isDark = true;
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.classList.toggle('light', !isDark);
+  document.getElementById('themeBtn').textContent = isDark ? '☀️ Light' : '🌙 Dark';
+  if (filteredData.length) updateCharts();
+  if (filteredPackData.length) updatePackingCharts();
+}
+
+// ── TAB SWITCHING ──────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    b.classList.toggle('active', (i===0&&tab==='yield')||(i===1&&tab==='packing'));
+  });
+  document.getElementById('tabYield').classList.toggle('active', tab==='yield');
+  document.getElementById('tabPacking').classList.toggle('active', tab==='packing');
+  if(tab==='packing' && filteredPackData.length) updatePackingCharts();
+}
+
+// ── PACKING DATA ───────────────────────────────────────────
+let rawPackData = [], filteredPackData = [], packPage = 1;
+const PACK_PAGE_SIZE = 50;
+
+// ── GRADE MAP ──────────────────────────────────────────────
+const GRADE_MAP = {
+  'Cสั้น':'C สั้น','Cยาว':'C ยาว','C -Pouch':'C-Pouch',
+  'A50g':'A50G','AB world':'AB World','DDควิก':'DD ควิก',
+  'DDBalance':'DD Balance','CIS 32.5 g':'CIS32.5',
+  'คริสตัลเรดดี้40G':'คริสตัลเรดดี้ 40G',
+  'Flash':'CIS 25g',
+};
+function normalizeGrade(raw) { const t=String(raw).trim(); return GRADE_MAP[t]||t; }
+
+// ── STATE ──────────────────────────────────────────────────
+let rawData=[], filteredData=[], charts={}, currentPage=1;
+const PAGE_SIZE=50;
+
+// ── DRAG & DROP ────────────────────────────────────────────
+const dropZone=document.getElementById('dropZone');
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');if(e.dataTransfer.files[0])processFile(e.dataTransfer.files[0]);});
+function handleFileUpload(input){if(input.files[0])processFile(input.files[0]);}
+
+// ── DATE HELPER ────────────────────────────────────────────
+// แปลง Excel value เป็น YYYY-MM-DD โดยไม่ผ่าน Date object (ป้องกัน timezone shift)
+function excelDateToStr(v){
+  if(!v) return null;
+  if(typeof v === 'number'){
+    // Excel serial: days since 1899-12-30
+    const serial = Math.floor(v);
+    // แปลงเป็น YYYY-MM-DD โดยตรง ไม่ผ่าน Date()
+    const epoch = new Date(Date.UTC(1899,11,30)); // 1899-12-30 UTC
+    const ms = epoch.getTime() + serial * 86400000;
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const mo = String(d.getUTCMonth()+1).padStart(2,'0');
+    const day = String(d.getUTCDate()).padStart(2,'0');
+    return `${y}-${mo}-${day}`;
+  }
+  if(typeof v === 'string'){
+    // อาจเป็น "2026-01-03" หรือ "3/1/2026"
+    const m = v.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+    const m2 = v.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if(m2) return `${m2[3]}-${String(m2[2]).padStart(2,'0')}-${String(m2[1]).padStart(2,'0')}`;
+  }
+  return null;
+}
+
+// ── FILE PROCESSING ────────────────────────────────────────
+function processFile(file) {
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try {
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:false});
+      const sheetName=wb.SheetNames.find(n=>n==='Data-Yield')||wb.SheetNames[0];
+      if(!sheetName){alert('ไม่พบ Sheet "Data-Yield"');return;}
+      const ws=wb.Sheets[sheetName];
+      const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+      let headerIdx=-1;
+      for(let i=0;i<Math.min(10,raw.length);i++){
+        if(raw[i]&&raw[i].some(c=>c&&String(c).includes('วันที'))){headerIdx=i;break;}
+      }
+      if(headerIdx<0)headerIdx=2;
+
+      const headers=raw[headerIdx];
+      const ci={};
+      headers.forEach((h,i)=>{
+        if(!h)return;
+        const s=String(h).trim();
+        if(s.includes('วันที'))                                      ci.date=i;
+        else if(s==='เดือน')                                         ci.month=i;
+        else if(s==='LOT')                                           ci.lot=i;
+        else if(s.includes('เกรด'))                                  ci.grade=i;
+        else if(s.includes('ประเภท'))                                ci.type=i;
+        else if(s==='จำนวนชุด'&&!ci.sets)                            ci.sets=i;
+        else if(s==='%Yield ทำเส้น')                                 ci.yield_sen=i;
+        else if(s==='%Yield อบ')                                     ci.yield_ob=i;
+        else if(s==='% Waste ทำเส้น')                                ci.waste_sen=i;
+        else if(s.toLowerCase().includes('wasteอบ')||s==='%Wasteอบ') ci.waste_ob=i;
+        else if(s==='Capacity ทำเส้น')                               ci.cap_sen=i;
+        else if(s==='Capacity ล้างอบ')                               ci.cap_ob=i;
+        else if(s==='Productivity ทำเส้น')                           ci.prod_sen=i;
+        else if(s==='Productivity ล้างอบ')                           ci.prod_ob=i;
+        else if(s.includes('Total Yield'))                           ci.total_yield=i;
+      });
+
+      // Fallback: if ci.sets not found, scan all early rows for จำนวนชุด
+      if(ci.sets===undefined){
+        for(let ri=0;ri<=headerIdx+2&&ri<raw.length;ri++){
+          const r2=raw[ri]; if(!r2) continue;
+          for(let ci2=0;ci2<r2.length;ci2++){
+            if(r2[ci2]&&String(r2[ci2]).trim()==='จำนวนชุด'&&ci2!==17){ci.sets=ci2;break;}
+          }
+          if(ci.sets!==undefined)break;
+        }
+      }
+
+      rawData=[];
+      for(let r=headerIdx+1;r<raw.length;r++){
+        const row=raw[r]; if(!row) continue;
+        const dateVal=row[ci.date]; if(!dateVal) continue;
+        const dateStr = excelDateToStr(dateVal);
+        if(!dateStr) continue;
+        const rowType = String(row[ci.type]||'').trim();
+        rawData.push({
+          date:      dateStr,
+          month:     String(row[ci.month]||''),
+          lot:       String(row[ci.lot]||'').trim(),
+          grade:     normalizeGrade(row[ci.grade]||''),
+          type:      rowType,
+          sets:      toNum(row[ci.sets]),
+          yield_sen: toNum(row[ci.yield_sen]),
+          yield_ob:  toNum(row[ci.yield_ob]),
+          waste_sen: toNum(row[ci.waste_sen]),
+          waste_ob:  toNum(row[ci.waste_ob]),
+          prod_sen:  toNum(row[ci.prod_sen]),
+          prod_ob:   toNum(row[ci.prod_ob]),
+          cap_sen:     toNum(row[ci.cap_sen]),
+          cap_ob:      toNum(row[ci.cap_ob]),
+          total_yield: toNum(row[ci.total_yield]),
+        });
+      }
+
+      if(!rawData.length){alert('ไม่พบข้อมูล');return;}
+
+      // ── Parse Productivity (Packing) sheet ──
+      rawPackData = [];
+      const packSheet = wb.SheetNames.find(n=>n==='Productivity');
+      if(packSheet){
+        const pws = wb.Sheets[packSheet];
+        const praw = XLSX.utils.sheet_to_json(pws,{header:1,defval:null});
+        for(let r=1;r<praw.length;r++){
+          const row=praw[r]; if(!row||!row[0]) continue;
+          const pDateStr = excelDateToStr(row[0]);
+          if(!pDateStr) continue;
+          rawPackData.push({
+            date:   pDateStr,
+            month:  String(row[1]||''),
+            lot:    String(row[3]||'').trim().padStart(3,'0'),
+            type:   String(row[4]||'').trim(),
+            grade:  String(row[5]||'').trim(),
+            size:   String(row[6]||'').trim(),
+            customer: String(row[7]||'').trim(),
+            kg:     toNum(row[8]),
+            man:    toNum(row[9]),
+            hr:     toNum(row[10]),
+            kg_man_hr: toNum(row[11]),
+          });
+        }
+      }
+
+      document.getElementById('totalRows').textContent=rawData.length.toLocaleString();
+      document.getElementById('lastUpdate').textContent=file.name;
+      document.getElementById('dataBadge').style.display='';
+      document.getElementById('footerFile').textContent=`📁 ${file.name} · ${rawData.length} รายการ Yield + ${rawPackData.length} รายการบรรจุ`;
+      document.getElementById('tabNav').style.display='';
+      initFilters();
+      initPackingFilters();
+      document.getElementById('uploadOverlay').style.display='none';
+      document.getElementById('dashboard').style.display='block';
+      document.getElementById('packingDash').style.display='block';
+      applyFilters();
+      applyPackingFilters();
+    } catch(err){console.error(err);alert('เกิดข้อผิดพลาด: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+function toNum(v){if(v===null||v===undefined||v==='')return null;const n=parseFloat(v);return isNaN(n)?null:n;}
+
+// ── MULTISELECT ENGINE ──────────────────────────────────────
+// Unified engine: one Set per filter key
+const MS = {
+  month:  { sel: new Set(), label: 'เดือน' },
+  type:   { sel: new Set(), label: 'ประเภท' },
+  grade:  { sel: new Set(), label: 'เกรด' },
+  lot:    { sel: new Set(), label: 'Lot' },
+  pmonth: { sel: new Set(), label: 'เดือน' },
+  ptype:  { sel: new Set(), label: 'Type' },
+  pgrade: { sel: new Set(), label: 'Grade' },
+  plot:   { sel: new Set(), label: 'Lot' },
+};
+const MONTH_ORDER=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function msRender(key, arr){
+  const dd=document.getElementById(`dd-${key}`);
+  const s=MS[key].sel;
+  dd.innerHTML='';
+  const isPacking = key.startsWith('p');
+  const applyFn = isPacking ? applyPackingFilters : applyFilters;
+  // All row
+  const allRow=document.createElement('div');
+  allRow.className='ms-option'+(s.size===0?' selected':'');
+  allRow.innerHTML=`<div class="ms-checkbox">${s.size===0?'✓':''}</div><span>ทั้งหมด</span>`;
+  allRow.onclick=e=>{e.stopPropagation();s.clear();msRender(key,arr);msLabel(key);applyFn();};
+  dd.appendChild(allRow);
+  const div=document.createElement('div');div.className='ms-divider';dd.appendChild(div);
+  arr.forEach(v=>{
+    const row=document.createElement('div');
+    const sel=s.has(v);
+    row.className='ms-option'+(sel?' selected':'');
+    row.innerHTML=`<div class="ms-checkbox">${sel?'✓':''}</div><span>${v}</span>`;
+    row.onclick=e=>{
+      e.stopPropagation();
+      if(s.has(v))s.delete(v); else s.add(v);
+      msRender(key,arr);msLabel(key);applyFn();
+    };
+    dd.appendChild(row);
+  });
+}
+
+function msUpdate(key, arr){
+  // Drop selections no longer in arr
+  MS[key].sel=new Set([...MS[key].sel].filter(v=>arr.includes(v)));
+  msRender(key,arr);msLabel(key);
+}
+
+function msLabel(key){
+  const s=MS[key].sel;
+  const lbl=document.getElementById(`lbl-${key}`);
+  if(s.size===0) lbl.textContent='ทั้งหมด';
+  else if(s.size===1) lbl.textContent=[...s][0];
+  else lbl.textContent=`${s.size} ${MS[key].label}`;
+}
+
+function msToggle(key){
+  const dd=document.getElementById(`dd-${key}`);
+  const tr=document.getElementById(`trig-${key}`);
+  // Close all others first
+  Object.keys(MS).forEach(k=>{
+    if(k!==key){
+      document.getElementById(`dd-${k}`)?.classList.remove('open');
+      document.getElementById(`trig-${k}`)?.classList.remove('open');
+    }
+  });
+  const open=dd.classList.toggle('open');
+  tr.classList.toggle('open',open);
+}
+
+document.addEventListener('click',e=>{
+  Object.keys(MS).forEach(k=>{
+    if(!document.getElementById(`wrap-${k}`)?.contains(e.target)){
+      document.getElementById(`dd-${k}`)?.classList.remove('open');
+      document.getElementById(`trig-${k}`)?.classList.remove('open');
+    }
+  });
+});
+
+function msGet(key){ return [...MS[key].sel]; }
+function msClear(key){ MS[key].sel.clear(); }
+
+// ── FILTERS ────────────────────────────────────────────────
+function initFilters(){
+  const dates=rawData.map(d=>d.date).sort();
+  document.getElementById('fDateFrom').value=dates[0]||'';
+  document.getElementById('fDateTo').value=dates[dates.length-1]||'';
+  Object.keys(MS).forEach(k=>msClear(k));
+  msRender('month',[...new Set(rawData.map(d=>d.month))].filter(Boolean).sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b)));
+  msRender('type', [...new Set(rawData.map(d=>d.type))].filter(Boolean).sort());
+  msRender('grade',[...new Set(rawData.map(d=>d.grade))].filter(Boolean).sort());
+  msRender('lot',  [...new Set(rawData.map(d=>d.lot))].filter(Boolean).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})));
+  Object.keys(MS).forEach(k=>msLabel(k));
+}
+
+function applyFilters(){
+  const months=msGet('month');
+  const types =msGet('type');
+  const grades=msGet('grade');
+  const lots  =msGet('lot');
+  const dateFrom=document.getElementById('fDateFrom').value;
+  const dateTo  =document.getElementById('fDateTo').value;
+  const matchDate=d=>(!dateFrom||d.date>=dateFrom)&&(!dateTo||d.date<=dateTo);
+
+  filteredData=rawData.filter(d=>
+    (!months.length||months.includes(d.month))&&matchDate(d)&&
+    (!types.length ||types.includes(d.type))&&
+    (!grades.length||grades.includes(d.grade))&&
+    (!lots.length  ||lots.includes(d.lot))
+  );
+
+  // Cascade: each filter sees options from data filtered by all OTHER filters
+  function excl(skip){
+    return rawData.filter(d=>
+      (skip==='month'||!months.length||months.includes(d.month))&&matchDate(d)&&
+      (skip==='type' ||!types.length ||types.includes(d.type))&&
+      (skip==='grade'||!grades.length||grades.includes(d.grade))&&
+      (skip==='lot'  ||!lots.length  ||lots.includes(d.lot))
+    );
+  }
+
+  const mSrc=excl('month');
+  msUpdate('month',[...new Set(mSrc.map(d=>d.month))].filter(Boolean).sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b)));
+  const tSrc=excl('type');
+  msUpdate('type', [...new Set(tSrc.map(d=>d.type))].filter(Boolean).sort());
+  const gSrc=excl('grade');
+  msUpdate('grade',[...new Set(gSrc.map(d=>d.grade))].filter(Boolean).sort());
+  const lSrc=excl('lot');
+  msUpdate('lot',  [...new Set(lSrc.map(d=>d.lot))].filter(Boolean).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})));
+
+  document.getElementById('filterResult').innerHTML=
+    `แสดง <span>${filteredData.length.toLocaleString()}</span> จาก ${rawData.length.toLocaleString()} รายการ`;
+  currentPage=1;
+  updateKPIs();updateCharts();updateTable();
+}
+
+function resetFilters(){
+  Object.keys(MS).forEach(k=>{msClear(k);msLabel(k);});
+  const dates=rawData.map(d=>d.date).sort();
+  document.getElementById('fDateFrom').value=dates[0]||'';
+  document.getElementById('fDateTo').value=dates[dates.length-1]||'';
+  applyFilters();
+}
+
+// ── KPIs ───────────────────────────────────────────────────
+// Fields ที่ค่า 0 หมายถึง "ไม่มีข้อมูล" → ตัดออกจากการเฉลี่ย
+function avg(arr,key){
+  const v=arr.map(d=>d[key]).filter(v=>v!==null&&v!==undefined&&!isNaN(v)&&v!==0);
+  return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;
+}
+function sumF(arr,key){
+  // จำนวนชุด ยังคงรวม 0 (เพราะ 0 ชุด คือไม่ผลิต ไม่ใช่ missing data)
+  const v=arr.map(d=>d[key]).filter(v=>v!==null&&v!==undefined&&!isNaN(v));
+  return v.length?v.reduce((a,b)=>a+b,0):null;
+}
+function updateKPIs(){
+  const f=(v,d=2)=>v===null?'–':v.toFixed(d);
+  const fi=v=>v===null?'–':Math.round(v).toLocaleString();
+  document.getElementById('kpi1').textContent=f(avg(filteredData,'yield_sen'));
+  document.getElementById('kpi2').textContent=f(avg(filteredData,'yield_ob'));
+  document.getElementById('kpi3').textContent=f(avg(filteredData,'waste_sen'),3);
+  document.getElementById('kpi4').textContent=f(avg(filteredData,'waste_ob'),3);
+  document.getElementById('kpi5').textContent=f(avg(filteredData,'prod_sen'));
+  document.getElementById('kpi6').textContent=f(avg(filteredData,'prod_ob'));
+  document.getElementById('kpi7').textContent=f(avg(filteredData,'cap_sen'));
+  document.getElementById('kpi8').textContent=f(avg(filteredData,'cap_ob'));
+  document.getElementById('kpi9').textContent=fi(sumF(filteredData,'sets'));
+  document.getElementById('kpi10').textContent=f(avg(filteredData,'total_yield'));
+}
+
+// ── CHARTS ─────────────────────────────────────────────────
+function cDefaults(){
+  const tick=isDark?'#7a8aaa':'#64748b';
+  const grid=isDark?'rgba(42,58,85,0.4)':'rgba(203,213,225,0.6)';
+  const brd=isDark?'#2a3a55':'#cbd5e1';
+  const ttBg=isDark?'#1a2235':'#ffffff';
+  const ttTitle=isDark?'#e8edf5':'#0f172a';
+  return {
+    responsive:true,maintainAspectRatio:false,
+    plugins:{
+      legend:{labels:{color:tick,font:{family:'IBM Plex Sans Thai',size:11},boxWidth:12,padding:14}},
+      tooltip:{backgroundColor:ttBg,borderColor:brd,borderWidth:1,titleColor:ttTitle,bodyColor:tick,padding:10,
+               titleFont:{family:'IBM Plex Sans Thai'},bodyFont:{family:'IBM Plex Mono'}}
+    },
+    scales:{
+      x:{ticks:{color:tick,font:{family:'IBM Plex Sans Thai',size:10},maxTicksLimit:10},grid:{color:grid},border:{color:brd}},
+      y:{ticks:{color:tick,font:{family:'IBM Plex Mono',size:10}},grid:{color:grid},border:{color:brd}}
+    }
+  };
+}
+
+function groupByDate(data,key){
+  const map={};
+  data.forEach(d=>{
+    if(!map[d.date])map[d.date]=[];
+    const v=d[key];
+    if(v!==null&&v!==undefined&&v!==0)map[d.date].push(v);
+  });
+  return Object.keys(map).sort().map(date=>({date,value:map[date].length?map[date].reduce((a,b)=>a+b,0)/map[date].length:null}));
+}
+
+function mkLine(label,data,color){
+  return {label,data,borderColor:color,backgroundColor:color+'18',fill:false,tension:0.35,
+          pointRadius:3,pointHoverRadius:5,pointBackgroundColor:color,borderWidth:2};
+}
+
+function singleChart(id,label,key,color){
+  const g=groupByDate(filteredData,key);
+  rebuildChart(id,{type:'line',
+    data:{labels:g.map(x=>x.date.slice(5)),datasets:[mkLine(label,g.map(x=>x.value),color)]},
+    options:cDefaults()
+  });
+}
+
+// ── YIELD OB BASELINE ──────────────────────────────────────
+// Baselines by type (รวมทุกเกรดในประเภทนั้น)
+const BASELINE_TYPE = {
+  'DRY-CUT':   91.19,
+  'DRY-Block': 82.73,
+};
+// Baselines by grade (ใช้เมื่อเลือกเกรดเฉพาะ)
+const BASELINE_GRADE = {
+  'Aยาว':       91.40,
+  'Aสั้น':      91.40,
+  'B ยาว':      90.77,
+  'B สั้น':     90.77,
+  'C ยาว':      93.56,
+  'C สั้น':     93.56,
+  'CMA (NEW)':  82.34,
+  'CMA (NEW) ': 82.34,
+  'CIS 25g':    84.06,
+};
+
+function getBaseline(){
+  const types  = msGet('type');
+  const grades = msGet('grade');
+
+  // ── กรณี 1: เลือกเกรดเฉพาะ → ใช้ baseline ของเกรด ──
+  if(grades.length > 0){
+    const vals = grades.map(g => BASELINE_GRADE[g]).filter(v => v !== undefined);
+    // ถ้าทุกเกรดที่เลือกมี baseline → แสดง
+    if(vals.length === grades.length){
+      const bl = vals.reduce((a,b)=>a+b,0)/vals.length;
+      const label = grades.length === 1
+        ? `Baseline ${grades[0]} (${bl.toFixed(2)}%)`
+        : `Baseline เฉลี่ย ${grades.length} เกรด (${bl.toFixed(2)}%)`;
+      return { value: bl, label };
+    }
+    // บางเกรดไม่มี baseline → ไม่โชว์เลย
+    return null;
+  }
+
+  // ── กรณี 2: เลือกประเภทเดียว ไม่เลือกเกรด → ใช้ baseline ของประเภท ──
+  if(types.length === 1 && BASELINE_TYPE[types[0]] !== undefined){
+    const bl = BASELINE_TYPE[types[0]];
+    return { value: bl, label: `Baseline ${types[0]} (${bl.toFixed(2)}%)` };
+  }
+
+  // ── กรณีอื่นทั้งหมด → ไม่โชว์ ──
+  return null;
+}
+
+function mkBaseline(label, value, labels){
+  return {
+    label,
+    data: labels.map(() => value),
+    borderColor: '#facc15',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderDash: [6, 4],
+    pointRadius: 0,
+    pointHoverRadius: 0,
+    fill: false,
+    tension: 0,
+    order: 0,
+  };
+}
+
+function updateCharts(){
+  singleChart('chartYieldSen','%Yield ทำเส้น','yield_sen','#3b82f6');
+
+  // ── chartYieldOb ──
+  const g = groupByDate(filteredData,'yield_ob');
+  const labels = g.map(x=>x.date.slice(5));
+  rebuildChart('chartYieldOb',{type:'line', data:{labels, datasets:[mkLine('%Yield อบ',g.map(x=>x.value),'#10b981')]}, options:cDefaults()});
+
+  // ── chartTotalYield: เพิ่ม Baseline ──
+  const gt = groupByDate(filteredData,'total_yield');
+  const tlabels = gt.map(x=>x.date.slice(5));
+  const tdatasets = [mkLine('%Total Yield', gt.map(x=>x.value), '#6366f1')];
+  const bl = getBaseline();
+  if(bl) tdatasets.push(mkBaseline(bl.label, bl.value, tlabels));
+  rebuildChart('chartTotalYield',{type:'line', data:{labels:tlabels, datasets:tdatasets}, options:cDefaults()});
+
+  singleChart('chartWasteSen','%Waste ทำเส้น','waste_sen','#ef4444');
+  singleChart('chartWasteOb', '%Waste อบ',    'waste_ob', '#f59e0b');
+
+  const ps=groupByDate(filteredData,'prod_sen'), po=groupByDate(filteredData,'prod_ob');
+  rebuildChart('chartProd',{type:'line',
+    data:{labels:ps.map(x=>x.date.slice(5)),datasets:[mkLine('ทำเส้น',ps.map(x=>x.value),'#8b5cf6'),mkLine('ล้างอบ',po.map(x=>x.value),'#06b6d4')]},
+    options:cDefaults()
+  });
+
+  const cs=groupByDate(filteredData,'cap_sen'), co=groupByDate(filteredData,'cap_ob');
+  rebuildChart('chartCapacity',{type:'line',
+    data:{labels:cs.map(x=>x.date.slice(5)),datasets:[mkLine('ทำเส้น',cs.map(x=>x.value),'#34d399'),mkLine('ล้างอบ',co.map(x=>x.value),'#fb923c')]},
+    options:cDefaults()
+  });
+}
+
+function rebuildChart(id,config){
+  if(charts[id]){charts[id].destroy();delete charts[id];}
+  const ctx=document.getElementById(id);
+  if(ctx)charts[id]=new Chart(ctx.getContext('2d'),config);
+}
+
+// ── TABLE ──────────────────────────────────────────────────
+function updateTable(){
+  const start=(currentPage-1)*PAGE_SIZE;
+  const page=filteredData.slice(start,start+PAGE_SIZE);
+  const totalPages=Math.ceil(filteredData.length/PAGE_SIZE)||1;
+  document.getElementById('pageInfo').textContent=`หน้า ${currentPage}/${totalPages} (${filteredData.length.toLocaleString()} รายการ)`;
+
+  const f=(v,d=2)=>v==null?`<span style="color:var(--text-muted)">–</span>`:`${v.toFixed(d)}`;
+  const fw=v=>v==null?`<span style="color:var(--text-muted)">–</span>`:`<span style="color:${v>0.5?'#ef4444':v>0.2?'#f59e0b':'#10b981'}">${v.toFixed(4)}</span>`;
+  const fi=v=>v==null?`<span style="color:var(--text-muted)">–</span>`:`${Math.round(v).toLocaleString()}`;
+  const typeColor={'DRY-CUT':'#3b82f6','DRY-Block':'#8b5cf6','Fresh':'#10b981'};
+
+  document.getElementById('tableBody').innerHTML=page.map(d=>{
+    const tc=typeColor[d.type]||'var(--text-muted)';
+    return `<tr>
+      <td>${d.date}</td><td>${d.month}</td>
+      <td><span style="font-family:'IBM Plex Mono';font-size:11px">${d.lot}</span></td>
+      <td><span class="grade-pill">${d.grade}</span></td>
+      <td><span class="grade-pill" style="background:${tc}22;color:${tc}">${d.type||'–'}</span></td>
+      <td class="num">${fi(d.sets)}</td>
+      <td class="num">${f(d.yield_sen)}</td><td class="num">${f(d.yield_ob)}</td><td class="num" style="color:#6366f1">${f(d.total_yield)}</td>
+      <td class="num">${fw(d.waste_sen)}</td><td class="num">${fw(d.waste_ob)}</td>
+      <td class="num">${f(d.prod_sen)}</td><td class="num">${f(d.prod_ob)}</td>
+      <td class="num">${f(d.cap_sen)}</td><td class="num">${f(d.cap_ob)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function changePage(dir){
+  const total=Math.ceil(filteredData.length/PAGE_SIZE)||1;
+  currentPage=Math.max(1,Math.min(total,currentPage+dir));
+  updateTable();
+}
+
+// ── PACKING FILTERS ────────────────────────────────────────
+function initPackingFilters(){
+  const dates=rawPackData.map(d=>d.date).sort();
+  document.getElementById('pfDateFrom').value=dates[0]||'';
+  document.getElementById('pfDateTo').value=dates[dates.length-1]||'';
+  Object.keys(MS).filter(k=>k.startsWith('p')).forEach(k=>{MS[k].sel.clear();});
+  msRender('pmonth',[...new Set(rawPackData.map(d=>d.month))].filter(Boolean).sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b)));
+  msRender('ptype', [...new Set(rawPackData.map(d=>d.type))].filter(Boolean).sort());
+  msRender('pgrade',[...new Set(rawPackData.map(d=>d.grade))].filter(Boolean).sort());
+  msRender('plot',  [...new Set(rawPackData.map(d=>d.lot))].filter(Boolean).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})));
+  ['pmonth','ptype','pgrade','plot'].forEach(k=>msLabel(k));
+  // Build size chips from all data
+  const allSizes=[...new Set(rawPackData.map(d=>d.size))].filter(Boolean).sort(sizeSort);
+  buildSizeChips(allSizes);
+  document.getElementById('sizePanelWrap').style.display='';
+}
+
+// ── SIZE CHIP PANEL ────────────────────────────────────────
+let selectedSizes = new Set();
+
+// แปลง size string → กรัม เพื่อเรียงจากน้อยไปมาก
+function sizeToGrams(s){
+  const str = s.toLowerCase().trim();
+  // จับตัวเลขและหน่วย
+  const m = str.match(/([\d.]+)\s*(kg|g)/);
+  if(!m) return 999999; // ไม่รู้จัก → เอาไปท้ายสุด
+  const val = parseFloat(m[1]);
+  const unit = m[2];
+  return unit === 'kg' ? val * 1000 : val;
+}
+function sizeSort(a, b){ return sizeToGrams(a) - sizeToGrams(b); }
+
+function buildSizeChips(sizes){
+  const grid=document.getElementById('sizeCheckboxGrid');
+  grid.innerHTML='';
+  sizes.forEach(s=>{
+    const chip=document.createElement('div');
+    chip.className='size-chip'+(selectedSizes.has(s)?' checked':'');
+    chip.dataset.size=s;
+    chip.innerHTML=`<div class="chip-dot"></div><span>${s}</span>`;
+    chip.onclick=()=>{
+      if(selectedSizes.has(s)) selectedSizes.delete(s);
+      else selectedSizes.add(s);
+      chip.classList.toggle('checked', selectedSizes.has(s));
+      updateSizeSummary();
+      applyPackingFilters();
+    };
+    grid.appendChild(chip);
+  });
+  updateSizeSummary();
+}
+
+function updateSizeSummary(){
+  const n=selectedSizes.size;
+  document.getElementById('sizeSummary').textContent = n===0?'ทั้งหมด':`เลือก ${n} Size`;
+}
+
+function sizeSelectAll(){
+  document.querySelectorAll('.size-chip').forEach(c=>{
+    selectedSizes.add(c.dataset.size); c.classList.add('checked');
+  });
+  updateSizeSummary(); applyPackingFilters();
+}
+
+function sizeClearAll(){
+  selectedSizes.clear();
+  document.querySelectorAll('.size-chip').forEach(c=>c.classList.remove('checked'));
+  updateSizeSummary(); applyPackingFilters();
+}
+
+function updateSizeChips(availSizes){
+  document.querySelectorAll('.size-chip').forEach(c=>{
+    const avail=availSizes.includes(c.dataset.size);
+    c.style.opacity=avail?'1':'0.35';
+    c.style.pointerEvents=avail?'':'none';
+  });
+}
+
+function applyPackingFilters(){
+  const months = msGet('pmonth'), types = msGet('ptype'), grades = msGet('pgrade');
+  const sizes  = [...selectedSizes],  lots  = msGet('plot');
+  const df = document.getElementById('pfDateFrom').value;
+  const dt = document.getElementById('pfDateTo').value;
+  const md = d=>(!df||d.date>=df)&&(!dt||d.date<=dt);
+
+  filteredPackData = rawPackData.filter(d=>
+    (!months.length||months.includes(d.month))&&md(d)&&
+    (!types.length ||types.includes(d.type))&&
+    (!grades.length||grades.includes(d.grade))&&
+    (!sizes.length ||sizes.includes(d.size))&&
+    (!lots.length  ||lots.includes(d.lot))
+  );
+
+  // Cascade dropdowns (excluding size)
+  function excl(skip){
+    return rawPackData.filter(d=>
+      (skip==='pmonth'||!months.length||months.includes(d.month))&&md(d)&&
+      (skip==='ptype' ||!types.length ||types.includes(d.type))&&
+      (skip==='pgrade'||!grades.length||grades.includes(d.grade))&&
+      (skip==='psize' ||!sizes.length ||sizes.includes(d.size))&&
+      (skip==='plot'  ||!lots.length  ||lots.includes(d.lot))
+    );
+  }
+  const keys = ['pmonth','ptype','pgrade','plot'];
+  const fields = ['month','type','grade','lot'];
+  keys.forEach((k,i)=>{
+    const src=excl(k);
+    let arr=[...new Set(src.map(d=>d[fields[i]]))].filter(Boolean);
+    if(k==='pmonth') arr=arr.sort((a,b)=>MONTH_ORDER.indexOf(a)-MONTH_ORDER.indexOf(b));
+    else if(k==='plot') arr=arr.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+    else arr=arr.sort();
+    msUpdate(k,arr);
+  });
+  // Dim unavailable sizes
+  const availSizes=[...new Set(excl('psize').map(d=>d.size))].filter(Boolean);
+  updateSizeChips(availSizes);
+
+  document.getElementById('packingFilterResult').innerHTML=
+    `แสดง <span>${filteredPackData.length.toLocaleString()}</span> จาก ${rawPackData.length.toLocaleString()} รายการ`;
+  packPage=1;
+  updatePackingKPIs();
+  updatePackingCharts();
+  updatePackingTable();
+}
+
+function resetPackingFilters(){
+  ['pmonth','ptype','pgrade','plot'].forEach(k=>{msClear(k);msLabel(k);});
+  sizeClearAll();
+  const dates=rawPackData.map(d=>d.date).sort();
+  document.getElementById('pfDateFrom').value=dates[0]||'';
+  document.getElementById('pfDateTo').value=dates[dates.length-1]||'';
+  applyPackingFilters();
+}
+
+// ── PACKING KPIs ───────────────────────────────────────────
+function updatePackingKPIs(){
+  const f=(v,d=1)=>v===null?'–':v.toFixed(d);
+  const fi=v=>v===null?'–':Math.round(v).toLocaleString();
+  const vals=filteredPackData.map(d=>d.kg_man_hr).filter(v=>v!==null&&!isNaN(v));
+  const avgProd=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+  const totalKg=filteredPackData.map(d=>d.kg).filter(v=>v!==null&&!isNaN(v)).reduce((a,b)=>a+b,0)||null;
+  const totalHr=filteredPackData.map(d=>d.hr).filter(v=>v!==null&&!isNaN(v)).reduce((a,b)=>a+b,0)||null;
+  document.getElementById('pkpi1').textContent=f(avgProd);
+  document.getElementById('pkpi2').textContent=fi(totalKg);
+  document.getElementById('pkpi3').textContent=f(totalHr,1);
+}
+
+// ── PACKING CHARTS ─────────────────────────────────────────
+
+// STD Productivity (kg/man-hr) แยกตาม Type + Size/Grade
+const PACK_STD = {
+  Cutting: { '40g':8, '80g':13, '200g':25, '500g':46, '1kg':48, '10kg':70 },
+  Block:   { 'CMA':19, 'CIS':32, 'Kelp':32 },
+};
+
+// หา STD ที่เหมาะสมกับ filter ปัจจุบัน
+// คืนค่า { label, value } หรือ null
+function getPackStd(){
+  const types  = msGet('ptype');
+  const grades = msGet('pgrade');
+  const sizes  = [...selectedSizes];
+
+  // ── Cutting: ดูจาก Size ──
+  if(types.length===1 && types[0]==='Cutting' && sizes.length===1){
+    const std = PACK_STD.Cutting[sizes[0]];
+    if(std) return { label:`STD ${sizes[0]} (${std} kg/man-hr)`, value:std };
+  }
+
+  // ── Block: ดูจาก Grade ──
+  if(types.length===1 && types[0]==='Block'){
+    // หา STD key ที่ grade เริ่มต้นด้วย
+    const stdKey = grades.length===1
+      ? Object.keys(PACK_STD.Block).find(k=>grades[0].toLowerCase().startsWith(k.toLowerCase()))
+      : null;
+    if(stdKey) return { label:`STD ${grades[0]} (${PACK_STD.Block[stdKey]} kg/man-hr)`, value:PACK_STD.Block[stdKey] };
+  }
+
+  return null;
+}
+
+function mkPackStdLine(label, value, labels){
+  return {
+    label, data:labels.map(()=>value),
+    borderColor:'#facc15', backgroundColor:'transparent',
+    borderWidth:2, borderDash:[6,4],
+    pointRadius:0, pointHoverRadius:0, fill:false, tension:0, order:0,
+  };
+}
+
+function updatePackingCharts(){
+  const opts=cDefaults();
+  const palette=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#a78bfa'];
+  const std = getPackStd();
+
+  // 1. Productivity trend by date (+ STD line ถ้ามี)
+  const dateMap={};
+  filteredPackData.forEach(d=>{
+    if(!dateMap[d.date]) dateMap[d.date]={sum:0,count:0};
+    if(d.kg_man_hr!==null&&!isNaN(d.kg_man_hr)){dateMap[d.date].sum+=d.kg_man_hr;dateMap[d.date].count++;}
+  });
+  const tDates=Object.keys(dateMap).sort();
+  const tLabels=tDates.map(d=>d.slice(5));
+  const tDatasets=[mkLine('kg/man-hr',tDates.map(d=>dateMap[d].count?dateMap[d].sum/dateMap[d].count:null),'#3b82f6')];
+  if(std) tDatasets.push(mkPackStdLine(std.label, std.value, tLabels));
+  rebuildChart('chartPackProd',{type:'line', data:{labels:tLabels, datasets:tDatasets}, options:opts});
+
+  // 2. kg by date
+  const kgMap={};
+  filteredPackData.forEach(d=>{
+    if(!kgMap[d.date]) kgMap[d.date]=0;
+    if(d.kg!==null&&!isNaN(d.kg)) kgMap[d.date]+=d.kg;
+  });
+  const kDates=Object.keys(kgMap).sort();
+  rebuildChart('chartPackKg',{type:'bar',
+    data:{labels:kDates.map(d=>d.slice(5)),datasets:[{label:'kg',data:kDates.map(d=>kgMap[d]),backgroundColor:'#10b98155',borderColor:'#10b981',borderWidth:1,borderRadius:3}]},
+    options:opts
+  });
+
+  // 3. Productivity by Grade (bar + STD สำหรับ Block)
+  const gradeMap={};
+  filteredPackData.forEach(d=>{
+    if(!d.grade||d.kg_man_hr===null||isNaN(d.kg_man_hr)) return;
+    if(!gradeMap[d.grade]) gradeMap[d.grade]={sum:0,count:0};
+    gradeMap[d.grade].sum+=d.kg_man_hr; gradeMap[d.grade].count++;
+  });
+  const gLabels=Object.keys(gradeMap).sort();
+  const gVals=gLabels.map(g=>gradeMap[g].count?gradeMap[g].sum/gradeMap[g].count:0);
+  // STD overlay สำหรับแต่ละ grade ใน Block
+  const types=msGet('ptype');
+  const gStdVals=gLabels.map(g=>{
+    if(types.length===1&&types[0]==='Block'){
+      const k=Object.keys(PACK_STD.Block).find(k=>g.toLowerCase().startsWith(k.toLowerCase()));
+      return k?PACK_STD.Block[k]:null;
+    }
+    return null;
+  });
+  const gDatasets=[{label:'kg/man-hr',data:gVals,backgroundColor:gLabels.map((_,i)=>palette[i%palette.length]+'99'),borderColor:gLabels.map((_,i)=>palette[i%palette.length]),borderWidth:1,borderRadius:4,type:'bar'}];
+  if(gStdVals.some(v=>v!==null)){
+    gDatasets.push({label:'STD',data:gStdVals,type:'bar',backgroundColor:'rgba(250,204,21,.25)',borderColor:'#facc15',borderWidth:2,borderRadius:4});
+  }
+  rebuildChart('chartPackGrade',{type:'bar',
+    data:{labels:gLabels,datasets:gDatasets},
+    options:{...opts,plugins:{...opts.plugins,legend:{labels:{color:isDark?'#7a8aaa':'#64748b',font:{family:'IBM Plex Sans Thai',size:11},boxWidth:12,padding:14}}}}
+  });
+
+  // 4. Productivity by Size (bar + STD สำหรับ Cutting)
+  const sizeMap={};
+  filteredPackData.forEach(d=>{
+    if(!d.size||d.kg_man_hr===null||isNaN(d.kg_man_hr)) return;
+    if(!sizeMap[d.size]) sizeMap[d.size]={sum:0,count:0};
+    sizeMap[d.size].sum+=d.kg_man_hr; sizeMap[d.size].count++;
+  });
+  const sLabels=Object.keys(sizeMap).sort(sizeSort);
+  const sVals=sLabels.map(s=>sizeMap[s].count?sizeMap[s].sum/sizeMap[s].count:0);
+  const sStdVals=sLabels.map(s=>{
+    if(types.length===1&&types[0]==='Cutting') return PACK_STD.Cutting[s]??null;
+    return null;
+  });
+  const sDatasets=[{label:'kg/man-hr',data:sVals,backgroundColor:sLabels.map((_,i)=>palette[i%palette.length]+'99'),borderColor:sLabels.map((_,i)=>palette[i%palette.length]),borderWidth:1,borderRadius:4,type:'bar'}];
+  if(sStdVals.some(v=>v!==null)){
+    sDatasets.push({label:'STD',data:sStdVals,type:'bar',backgroundColor:'rgba(250,204,21,.25)',borderColor:'#facc15',borderWidth:2,borderRadius:4});
+  }
+  rebuildChart('chartPackSize',{type:'bar',
+    data:{labels:sLabels,datasets:sDatasets},
+    options:{...opts,plugins:{...opts.plugins,legend:{labels:{color:isDark?'#7a8aaa':'#64748b',font:{family:'IBM Plex Sans Thai',size:11},boxWidth:12,padding:14}}},scales:{...opts.scales,x:{...opts.scales.x,ticks:{...opts.scales.x.ticks,maxRotation:45}}}}
+  });
+}
+
+// ── PACKING TABLE ──────────────────────────────────────────
+function updatePackingTable(){
+  const start=(packPage-1)*PACK_PAGE_SIZE;
+  const page=filteredPackData.slice(start,start+PACK_PAGE_SIZE);
+  const totalPages=Math.ceil(filteredPackData.length/PACK_PAGE_SIZE)||1;
+  document.getElementById('packPageInfo').textContent=`หน้า ${packPage}/${totalPages} (${filteredPackData.length.toLocaleString()} รายการ)`;
+  const f=(v,d=2)=>v==null?`<span style="color:var(--text-muted)">–</span>`:`${v.toFixed(d)}`;
+  document.getElementById('packTableBody').innerHTML=page.map(d=>`<tr>
+    <td>${d.date}</td><td>${d.month}</td>
+    <td><span style="font-family:'IBM Plex Mono';font-size:11px">${d.lot}</span></td>
+    <td>${d.type}</td>
+    <td><span class="grade-pill">${d.grade}</span></td>
+    <td><span class="grade-pill" style="background:rgba(99,102,241,.15);color:#6366f1">${d.size}</span></td>
+    <td style="font-size:11px;color:var(--text-muted)">${d.customer}</td>
+    <td class="num">${f(d.kg,1)}</td>
+    <td class="num">${d.man??'–'}</td>
+    <td class="num">${f(d.hr,2)}</td>
+    <td class="num" style="color:#3b82f6;font-weight:600">${f(d.kg_man_hr,2)}</td>
+  </tr>`).join('');
+}
+
+function changePackPage(dir){
+  const total=Math.ceil(filteredPackData.length/PACK_PAGE_SIZE)||1;
+  packPage=Math.max(1,Math.min(total,packPage+dir));
+  updatePackingTable();
+}
+</script>
+</body>
+</html>
